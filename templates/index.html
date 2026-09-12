@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tesla 10-K RAG Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-background">
+        <div class="bg-glow glow-1"></div>
+        <div class="bg-glow glow-2"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-brand">
+                <div class="logo-badge">
+                    <svg viewBox="0 0 24 24" class="logo-icon" fill="currentColor">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1>Tesla 10-K RAG System</h1>
+                    <p class="subtitle">Semantic Knowledge Retrieval & QA &bull; SEC Form 10-K (FY 2023)</p>
+                </div>
+            </div>
+            <div class="header-status">
+                <span class="status-indicator"></span>
+                <span id="status-text">Connecting to Vector Store...</span>
+            </div>
+        </header>
+
+        <!-- Stats Ribbon -->
+        <div class="stats-ribbon" id="stats-ribbon">
+            <div class="stat-item">
+                <span class="stat-label">Document</span>
+                <span class="stat-value" id="stat-doc">Tesla Form 10-K (130 pgs)</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <span class="stat-label">Vector Space</span>
+                <span class="stat-value" id="stat-model">all-MiniLM-L6-v2 (384-d)</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <span class="stat-label">Indexed Chunks</span>
+                <span class="stat-value" id="stat-chunks">Loading...</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <span class="stat-label">Search Metric</span>
+                <span class="stat-value">Cosine Similarity</span>
+            </div>
+        </div>
+
+        <!-- Query Form Section -->
+        <section class="search-card">
+            <form id="rag-form" class="query-form">
+                <div class="input-wrapper">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input 
+                        type="text" 
+                        id="query-input" 
+                        placeholder="Ask anything from the Tesla 10-K (e.g., 'What was the annual revenue in 2022?')" 
+                        autocomplete="off"
+                        required
+                    />
+                    <button type="submit" id="submit-btn" class="btn-primary">
+                        <span class="btn-text">Ask RAG</span>
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Query Controls -->
+                <div class="query-controls">
+                    <div class="control-group">
+                        <label for="top-k-select">Top-K Chunks:</label>
+                        <select id="top-k-select">
+                            <option value="3">3 Chunks</option>
+                            <option value="5" selected>5 Chunks (Recommended)</option>
+                            <option value="7">7 Chunks</option>
+                            <option value="10">10 Chunks</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="gen-mode-select">Generator:</label>
+                        <select id="gen-mode-select">
+                            <option value="local" selected>Local (Flan-T5 + Structured)</option>
+                            <option value="gemini">Google Gemini API (Optional)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group" id="api-key-group" style="display: none;">
+                        <input type="password" id="gemini-key-input" placeholder="Enter Gemini API Key..." />
+                    </div>
+                </div>
+            </form>
+
+            <!-- Suggested Queries Chips -->
+            <div class="suggestions-container">
+                <span class="suggestions-title">Sample Queries:</span>
+                <div class="chips-wrapper">
+                    <button class="chip" data-query="annual revenue in 2022">annual revenue in 2022</button>
+                    <button class="chip" data-query="What was the total revenue in 2023?">Total revenue in 2023</button>
+                    <button class="chip" data-query="What are the locations of primary manufacturing facilities?">Primary manufacturing facilities</button>
+                    <button class="chip" data-query="What was the total automotive gross margin in 2023?">Automotive gross margin in 2023</button>
+                    <button class="chip" data-query="Who is the Chief Executive Officer and Technoking of Tesla?">CEO & Technoking</button>
+                    <button class="chip" data-query="How many consumer vehicles were produced and delivered in 2023?">Vehicle production & deliveries</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="loading-state" style="display: none;">
+            <div class="pulse-spinner"></div>
+            <div class="loading-info">
+                <p class="loading-heading">Searching Vector Space & Synthesizing Answer...</p>
+                <p class="loading-subtext">Computing all-MiniLM-L6-v2 embeddings and ranking cosine similarities</p>
+            </div>
+        </div>
+
+        <!-- Result Section -->
+        <main id="result-card" class="result-card" style="display: none;">
+            <div class="result-header">
+                <div class="result-badge-group">
+                    <span class="badge badge-success" id="result-mode-badge">Local Model</span>
+                    <span class="badge badge-timing" id="result-timing-badge">0.0ms</span>
+                </div>
+                <button class="copy-btn" id="copy-answer-btn" title="Copy answer">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>Copy</span>
+                </button>
+            </div>
+
+            <!-- Answer Content -->
+            <div class="answer-content" id="answer-content"></div>
+
+            <!-- Retrieved Sources Accordion -->
+            <div class="sources-section">
+                <div class="sources-header" id="sources-toggle">
+                    <div class="sources-title-group">
+                        <svg class="sources-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        <span class="sources-title">Retrieved Evidence Chunks (<span id="source-count">0</span>)</span>
+                    </div>
+                    <span class="accordion-arrow">&darr;</span>
+                </div>
+                <div class="sources-list" id="sources-list"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
