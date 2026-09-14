@@ -16,17 +16,17 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import transformers
 transformers.logging.set_verbosity_error()
 
-# Add current directory to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Support direct execution as well as pytest.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from data_loader import load_and_chunk_pdf
-from embeddings import get_embedding_model, generate_embeddings
-from vector_store import build_vector_store, save_vector_store, load_vector_store, retrieve_top_k
-from generator import generate_answer
+from tesla_rag.rag.data_loader import load_and_chunk_pdf
+from tesla_rag.rag.embeddings import get_embedding_model, generate_embeddings
+from tesla_rag.rag.vector_store import build_vector_store, save_vector_store, load_vector_store, retrieve_top_k
+from tesla_rag.rag.generator import generate_answer
 
 
 def test_rag_pipeline():
-    project_dir = Path(__file__).parent
+    project_dir = Path(__file__).resolve().parents[1]
     pdf_path = project_dir / "data" / "tsla-20231231-gen.pdf"
     vector_store_path = project_dir / "data" / "vector_store.pkl"
     

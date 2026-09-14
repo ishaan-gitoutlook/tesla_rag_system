@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from embeddings import generate_embeddings, compute_similarity
+from .embeddings import generate_embeddings, compute_similarity
 
 
 def build_vector_store(
