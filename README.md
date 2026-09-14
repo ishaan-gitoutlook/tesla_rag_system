@@ -4,6 +4,8 @@ A modular, lightweight **Retrieval-Augmented Generation (RAG)** pipeline and int
 
 The system uses `sentence-transformers/all-MiniLM-L6-v2` to map document segments into a dense 384-dimensional vector space, performs cosine similarity search, and synthesizes answers using local inference (`google/flan-t5-small` + structured extraction) with optional Google Gemini API support.
 
+
+
 ---
 
 ## 🌟 Key Features
@@ -15,6 +17,8 @@ The system uses `sentence-transformers/all-MiniLM-L6-v2` to map document segment
 - **Optional Gemini API Support**: Toggleable from the UI for multi-paragraph synthesis if a Gemini API key is provided.
 - **Interactive Dark-Mode UI**: Modern web interface featuring glassmorphism, Tesla red & cyan glow accents, one-click sample query chips, live response timing, and an expandable source drawer showing exact page citations and similarity percentages.
 - **Automated Verification Suite**: Includes `test_rag.py` validating retrieval precision and answer accuracy against SEC Form 10-K financial benchmarks.
+- **Validated API Boundaries**: Rejects malformed JSON, invalid query types, unsupported modes, and `top_k` values outside the safe range of 1–50 with clear `400` responses.
+- **Project Guidance**: `AGENTS.md` documents the supported checks, secret-handling rules, and data-file safety requirements.
 
 ---
 
@@ -39,6 +43,7 @@ tesla_rag_system/
 ├── embeddings.py                   # Embedding model loader & cosine similarity
 ├── generator.py                    # RAG prompt builder & local/Gemini answer generators
 ├── test_rag.py                     # End-to-end automated test runner
+├── AGENTS.md                       # Project development and safety instructions
 │
 ├── README.md                       # Complete documentation & usage guide
 └── WALKTHROUGH.md                  # Implementation walkthrough & verification results
@@ -82,16 +87,19 @@ tesla_rag_system/
 ## 🚀 Quickstart
 
 ### Prerequisites
-Make sure Python 3.10+ is installed along with required packages:
-```bash
-pip install sentence-transformers transformers torch pypdf flask scikit-learn
+Use Python 3.10+ and create an isolated virtual environment:
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 ```
-
 ### 1. Run Automated Verification Tests
-Run the test suite to verify retrieval and answer accuracy against the 10-K document:
+Run the executable verification script to verify retrieval and answer accuracy against the 10-K document:
 ```powershell
 python test_rag.py
 ```
+
+The script checks four benchmark queries and reports `ALL RAG VERIFICATION TESTS PASSED SUCCESSFULLY!` when they pass. The repository does not currently include `pytest` as a dependency, so use this command rather than `python -m pytest`.
 
 ### 2. Launch the Web UI
 Start the Flask web server:
@@ -150,6 +158,13 @@ Open your browser at:
 ```
 
 ---
+
+Validation rules for `/api/query`:
+
+- `query` must be a non-empty string.
+- `top_k` must be an integer from 1 through 50.
+- `mode` must be `local` or `gemini`.
+- `api_key`, when supplied, must be a string. Keep API keys in environment variables or Air secrets rather than committing them to the repository.
 
 ## 📄 License
 Educational and demonstration purposes based on publicly filed SEC documents.

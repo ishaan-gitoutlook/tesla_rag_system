@@ -6,15 +6,11 @@ Exposes REST endpoints and serves a modern, responsive UI.
 
 import os
 import time
-import warnings
 from pathlib import Path
 
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-warnings.filterwarnings("ignore")
 
-import transformers
-transformers.logging.set_verbosity_error()
 
 from flask import Flask, request, jsonify, render_template
 
@@ -88,11 +84,26 @@ def api_query():
         mode: 'local' | 'gemini' (default 'local')
         api_key: Optional[str]
     """
-    data = request.get_json() or {}
-    query_text = data.get("query", "").strip()
-    top_k = int(data.get("top_k", 5))
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object."}), 400
+    raw_query = data.get("query", "")
+    if not isinstance(raw_query, str):
+        return jsonify({"error": "query must be a string."}), 400
+    query_text = raw_query.strip()
+    try:
+        top_k = int(data.get("top_k", 5))
+    except (TypeError, ValueError):
+        return jsonify({"error": "top_k must be a positive integer."}), 400
+    if top_k < 1 or top_k > 50:
+        return jsonify({"error": "top_k must be between 1 and 50."}), 400
     mode = data.get("mode", "local")
-    api_key = data.get("api_key", "").strip() or None
+    if not isinstance(mode, str) or mode not in {"local", "gemini"}:
+        return jsonify({"error": "mode must be 'local' or 'gemini'."}), 400
+    api_key = data.get("api_key")
+    if api_key is not None and not isinstance(api_key, str):
+        return jsonify({"error": "api_key must be a string."}), 400
+    api_key = api_key.strip() if api_key else None
 
     if not query_text:
         return jsonify({"error": "Query cannot be empty."}), 400

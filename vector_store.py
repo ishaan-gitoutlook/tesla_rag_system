@@ -27,7 +27,10 @@ def build_vector_store(
     Returns:
         Vector store dictionary.
     """
-    assert len(chunks) == len(embeddings), "Number of chunks and embeddings must match."
+    if embeddings.ndim != 2:
+        raise ValueError("Embeddings must be a 2D array with shape (N, D).")
+    if len(chunks) != len(embeddings):
+        raise ValueError("Number of chunks and embeddings must match.")
     return {
         "chunks": chunks,
         "embeddings": embeddings,
@@ -85,14 +88,18 @@ def retrieve_top_k(
     Returns:
         List of retrieved chunk dicts, each augmented with 'score' and 'rank'.
     """
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("Query must be a non-empty string.")
+    if not isinstance(k, int) or isinstance(k, bool) or k < 1:
+        raise ValueError("k must be a positive integer.")
     chunks = store["chunks"]
-    embeddings = store["embeddings"]
+    embeddings = np.asarray(store["embeddings"])
     
     if len(chunks) == 0:
         return []
         
     # Generate query embedding
-    query_vec = generate_embeddings(query, model)
+    query_vec = generate_embeddings(query.strip(), model)
     
     # Compute similarity scores
     scores = compute_similarity(query_vec, embeddings)

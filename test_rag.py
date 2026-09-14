@@ -8,12 +8,10 @@ including 'annual revenue in 2022' to verify retrieval and answer accuracy.
 import os
 import sys
 import time
-import warnings
 from pathlib import Path
 
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-warnings.filterwarnings("ignore")
 
 import transformers
 transformers.logging.set_verbosity_error()

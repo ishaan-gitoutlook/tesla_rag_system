@@ -7,13 +7,11 @@ and optional Gemini API integration.
 import os
 import re
 import json
-import warnings
 import urllib.request
 from typing import List, Dict, Any, Optional
 
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-warnings.filterwarnings("ignore")
 
 import transformers
 transformers.logging.set_verbosity_error()
