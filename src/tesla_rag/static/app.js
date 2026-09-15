@@ -1,181 +1,72 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const statusText = document.getElementById('status-text');
-    const statChunks = document.getElementById('stat-chunks');
-    const ragForm = document.getElementById('rag-form');
-    const queryInput = document.getElementById('query-input');
-    const submitBtn = document.getElementById('submit-btn');
-    const topKSelect = document.getElementById('top-k-select');
-    const genModeSelect = document.getElementById('gen-mode-select');
-    const apiKeyGroup = document.getElementById('api-key-group');
-    const geminiKeyInput = document.getElementById('gemini-key-input');
-    
-    const loadingState = document.getElementById('loading-state');
-    const resultCard = document.getElementById('result-card');
-    const resultModeBadge = document.getElementById('result-mode-badge');
-    const resultTimingBadge = document.getElementById('result-timing-badge');
-    const answerContent = document.getElementById('answer-content');
-    const copyBtn = document.getElementById('copy-answer-btn');
-    
-    const sourcesToggle = document.getElementById('sources-toggle');
-    const sourcesList = document.getElementById('sources-list');
-    const sourceCount = document.getElementById('source-count');
-    const chips = document.querySelectorAll('.chip');
+  const $ = (id) => document.getElementById(id);
+  const form = $('rag-form'), input = $('query-input'), submit = $('submit-btn');
+  const loading = $('loading-state'), result = $('result-card'), error = $('error-message');
+  const mode = $('gen-mode-select'), keyGroup = $('api-key-group');
 
-    // 1. Fetch initial vector store stats
-    async function loadStats() {
-        try {
-            const res = await fetch('/api/stats');
-            const data = await res.json();
-            if (data.status === 'ready') {
-                statusText.textContent = 'Vector Space Ready';
-                statChunks.textContent = `${data.total_chunks} Chunks`;
-            }
-        } catch (err) {
-            statusText.textContent = 'Vector Store Offline';
-            console.error('Stats load error:', err);
-        }
+  const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+  const formatAnswer = (text) => {
+    const safe = escapeHTML(text);
+    return safe.split(/\n\s*\n/).map((block) => {
+      if (/^(?:[-•] |\d+\. )/m.test(block)) {
+        const items = block.split('\n').filter(Boolean).map((line) => `<li>${line.replace(/^(?:[-•]|\d+\.)\s*/, '')}</li>`).join('');
+        return `<ul>${items}</ul>`;
+      }
+      return `<p>${block.replace(/\n/g, '<br>')}</p>`;
+    }).join('');
+  };
+  const showError = (message) => { error.textContent = message; error.hidden = false; };
+  const clearError = () => { error.hidden = true; error.textContent = ''; };
+
+  async function loadStats() {
+    try {
+      const response = await fetch('/api/stats');
+      if (!response.ok) throw new Error('The vector store is unavailable.');
+      const data = await response.json();
+      $('status-text').textContent = 'Vector store ready';
+      $('stat-chunks').textContent = `${data.total_chunks} chunks`;
+      $('stat-model').textContent = data.embedding_model || 'Local embeddings';
+    } catch (err) {
+      $('status-text').textContent = 'Vector store offline';
+      $('status-dot').style.color = '#e82127';
+      $('stat-chunks').textContent = 'Unavailable';
+      $('stat-model').textContent = 'Unavailable';
     }
-    loadStats();
+  }
+  loadStats();
 
-    // 2. Mode change listener
-    genModeSelect.addEventListener('change', () => {
-        if (genModeSelect.value === 'gemini') {
-            apiKeyGroup.style.display = 'block';
-        } else {
-            apiKeyGroup.style.display = 'none';
-        }
-    });
+  input.addEventListener('input', () => { $('query-count').textContent = input.value.length; });
+  mode.addEventListener('change', () => { keyGroup.hidden = mode.value !== 'gemini'; });
+  input.addEventListener('keydown', (event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') form.requestSubmit(); });
 
-    // 3. Simple Markdown formatter
-    function formatMarkdown(text) {
-        if (!text) return '';
-        let formatted = text
-            // Escape basic HTML
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            // Bold
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            // Italic
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            // Bullet points
-            .replace(/^• (.*?)$/gm, '<li>$1</li>')
-            .replace(/^- (.*?)$/gm, '<li>$1</li>')
-            // Numbered items
-            .replace(/^(\d+)\. (.*?)$/gm, '<li style="list-style-type: decimal;">$2</li>');
-
-        // Wrap list items
-        formatted = formatted.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
-        // Clean duplicate ul tags if consecutive
-        formatted = formatted.replace(/<\/ul>\s*<ul>/g, '');
-        
-        // Paragraphs
-        const paragraphs = formatted.split(/\n\n+/);
-        return paragraphs.map(p => {
-            if (p.startsWith('<ul>') || p.startsWith('<li') || p.startsWith('<table')) {
-                return p;
-            }
-            return `<p>${p.replace(/\n/g, '<br>')}</p>`;
-        }).join('');
-    }
-
-    // 4. Query Execution
-    async function executeQuery(queryText) {
-        if (!queryText.trim()) return;
-
-        queryInput.value = queryText;
-        resultCard.style.display = 'none';
-        loadingState.style.display = 'flex';
-        submitBtn.disabled = true;
-
-        const payload = {
-            query: queryText.trim(),
-            top_k: parseInt(topKSelect.value, 10),
-            mode: genModeSelect.value,
-            api_key: geminiKeyInput.value.trim() || undefined
-        };
-
-        try {
-            const res = await fetch('/api/query', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            const data = await res.json();
-            if (res.ok) {
-                // Populate result
-                resultModeBadge.textContent = data.generator_mode || 'Local Generator';
-                const totalMs = data.timing?.total_ms || 0;
-                resultTimingBadge.textContent = `${totalMs}ms (${data.timing?.retrieval_ms}ms search)`;
-                
-                answerContent.innerHTML = formatMarkdown(data.answer);
-
-                // Render sources
-                const sources = data.sources || [];
-                sourceCount.textContent = sources.length;
-                sourcesList.innerHTML = '';
-                
-                sources.forEach((src, idx) => {
-                    const card = document.createElement('div');
-                    card.className = 'source-card';
-                    card.innerHTML = `
-                        <div class="source-meta">
-                            <span class="source-page">Source #${idx + 1} &bull; Page ${src.page_number}</span>
-                            <span class="source-score">Similarity: ${(src.score * 100).toFixed(1)}%</span>
-                        </div>
-                        <div class="source-snippet">${src.snippet}</div>
-                    `;
-                    sourcesList.appendChild(card);
-                });
-
-                resultCard.style.display = 'flex';
-                // Smooth scroll to answer
-                resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            } else {
-                alert(`Error: ${data.error || 'Failed to generate answer'}`);
-            }
-        } catch (err) {
-            alert(`Query request failed: ${err.message}`);
-        } finally {
-            loadingState.style.display = 'none';
-            submitBtn.disabled = false;
-        }
-    }
-
-    // 5. Form Submit handler
-    ragForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        executeQuery(queryInput.value);
-    });
-
-    // 6. Sample Query Chips
-    chips.forEach(chip => {
-        chip.addEventListener('click', () => {
-            const query = chip.getAttribute('data-query');
-            executeQuery(query);
-        });
-    });
-
-    // 7. Sources Accordion Toggle
-    let sourcesOpen = true;
-    sourcesToggle.addEventListener('click', () => {
-        sourcesOpen = !sourcesOpen;
-        sourcesList.style.display = sourcesOpen ? 'flex' : 'none';
-        const arrow = sourcesToggle.querySelector('.accordion-arrow');
-        arrow.style.transform = sourcesOpen ? 'rotate(0deg)' : 'rotate(-90deg)';
-    });
-
-    // 8. Copy Answer Button
-    copyBtn.addEventListener('click', async () => {
-        const text = answerContent.innerText;
-        try {
-            await navigator.clipboard.writeText(text);
-            const span = copyBtn.querySelector('span');
-            span.textContent = 'Copied!';
-            setTimeout(() => { span.textContent = 'Copy'; }, 2000);
-        } catch (err) {
-            console.error('Failed to copy text:', err);
-        }
-    });
+  async function executeQuery(query) {
+    const trimmed = query.trim();
+    if (!trimmed) { showError('Enter a question before searching.'); input.focus(); return; }
+    clearError(); input.value = trimmed; $('query-count').textContent = trimmed.length;
+    result.hidden = true; loading.hidden = false; submit.disabled = true;
+    try {
+      const response = await fetch('/api/query', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query: trimmed, top_k: Number($('top-k-select').value), mode: mode.value, api_key: $('gemini-key-input').value.trim() || undefined}) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'The query could not be completed.');
+      $('result-mode-badge').textContent = data.generator_mode || 'Local model';
+      $('result-timing-badge').textContent = `${data.timing?.total_ms ?? 0} ms total · ${data.timing?.retrieval_ms ?? 0} ms retrieval`;
+      $('answer-content').innerHTML = formatAnswer(data.answer);
+      const sources = Array.isArray(data.sources) ? data.sources : [];
+      $('source-count').textContent = sources.length;
+      const list = $('sources-list'); list.replaceChildren();
+      sources.forEach((source, index) => {
+        const card = document.createElement('article'); card.className = 'source-card';
+        const meta = document.createElement('div'); meta.className = 'source-meta';
+        const page = document.createElement('span'); page.textContent = `Source ${index + 1} · Page ${source.page_number ?? '—'}`;
+        const score = document.createElement('span'); score.className = 'source-score'; score.textContent = `Similarity: ${((source.score || 0) * 100).toFixed(1)}%`;
+        meta.append(page, score); const snippet = document.createElement('div'); snippet.className = 'source-snippet'; snippet.textContent = source.snippet || '';
+        card.append(meta, snippet); list.append(card);
+      });
+      result.hidden = false; result.scrollIntoView({behavior: 'smooth', block: 'start'});
+    } catch (err) { showError(err.message); }
+    finally { loading.hidden = true; submit.disabled = false; }
+  }
+  form.addEventListener('submit', (event) => { event.preventDefault(); executeQuery(input.value); });
+  document.querySelectorAll('.suggestion').forEach((button) => button.addEventListener('click', () => executeQuery(button.dataset.query)));
+  $('copy-answer-btn').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('answer-content').innerText); $('copy-answer-btn').textContent = 'Copied'; setTimeout(() => $('copy-answer-btn').textContent = 'Copy answer', 1600); } catch { showError('Copy is not available in this browser.'); } });
 });
